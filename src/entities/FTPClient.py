@@ -1,4 +1,5 @@
 import os
+import io
 import ftplib
 from termcolor import colored
 
@@ -18,79 +19,94 @@ class FTPClient:
             'cat': self._cat,
             'pwd': self._pwd,
             'nano': self._nano,
-            'exit': self._shutdown,
+            'rm': self._rm,
+            'shutdown': self._shutdown,
             'help': self._help,
         }
 
 
     def _mkdir(self, dir_name):
-        if self._client:
-            self._client.mkd(f'{self.current_dir}/{dir_name}')
-            return f"Directory '{dir_name}' created successfully."
+        dirs = dir_name.split('/')
+        current_dir = self.current_dir
+        for d in dirs:
+            dir = f'{current_dir}/{d}'
+            self._client.mkd(dir)
+            current_dir = dir
+        return f"Directory '{current_dir}' created successfully."
 
 
     def _touch(self, file_name):
-        if self._client:
-            self._client.cwd(self.current_dir)
-            self._client.storbinary(f"STOR {file_name}", open(file_name, 'rb'))
-            return f"File '{file_name}' created successfully."
+        self._client.cwd(self.current_dir)
+        self._client.storbinary(f"STOR {file_name}", io.BytesIO())
+        return f"File '{file_name}' created successfully."
 
 
     def _mv(self, old_path, new_path):
-        if self._client:
-            self._client.rename(old_path, new_path)
-            return f'{old_path} renamed to {new_path} successfully.'
+        self._client.rename(old_path, new_path)
+        return f'{old_path} renamed to {new_path} successfully.'
 
 
     def _cd(self, dir_name):
-        if self._client:
-            self._client.cwd(os.path.join(self.current_dir, dir_name))
-            self.current_dir = self._client.pwd()
-            return f'Directory changed to {self.current_dir}'
+        self._client.cwd(os.path.join(self.current_dir, dir_name))
+        self.current_dir = self._client.pwd()
+        return f'Directory changed to {self.current_dir}'
 
 
     def _cat(self, file_name):
-        if self._client:
-            try:
-                with self._client.open(file_name) as f:
-                    return f.read()
-            except Exception as e:
-                return f'Error: {str(e)}'
+        try:
+            with io.BytesIO() as f:
+                self._client.retrbinary(f'RETR {file_name}', f.write)
+                f.seek(0)
+                return f.read().decode()
+        except Exception as e:
+            return f'Error: {str(e)}'
 
 
     def _nano(self, file_name):
-        if self._client:
-            local_file_path = os.path.join(os.getcwd(), file_name)
-            self._client.retrbinary(f'RETR {file_name}', open(local_file_path, 'wb').write)
-            os.system(f'nano {local_file_path}')
-            self._client.storbinary(f'STOR {file_name}', open(local_file_path, 'rb'))
-            os.remove(local_file_path)
-            return f"File '{file_name}' edited successfully."
-
-
-    def _ls(self, path="", **kwargs):
-        if self._client:
-            files = self._client.nlst(path or self.current_dir)
-            if kwargs.get('-t'):
-                return self.ls_tree()
-            else:
-                return '\n'.join(files)
+        local_file_path = os.path.join(os.getcwd(), file_name)
+        self._client.retrbinary(f'RETR {file_name}', open(local_file_path, 'wb').write)
+        os.system(f'nano {local_file_path}')
+        self._client.storbinary(f'STOR {file_name}', open(local_file_path, 'rb'))
+        os.remove(local_file_path)
+        return f"File '{file_name}' edited successfully."
 
 
     def _ls_tree(self, path='', level=0):
-        if self._client:
-            files = self._client.nlst(path or self.current_dir)
-            for file in files:
-                if '.' in file:
-                    print(f"| {'| ' * level}- {file}")
-                else:
-                    print(f"| {'| ' * level}+ {file}")
-                    self._ls_tree(path=file, level=level+1)
+        files = self._client.nlst(path or self.current_dir)
+        for file in files:
+            if '.' in file:
+                print(f"| {'| ' * level}- {file.split('/')[-1]}")
+            else:
+                print(f"| {'| ' * level}+ {file.split('/')[-1]}")
+                self._ls_tree(path=file, level=level+1)
 
+
+    def _ls(self, path="", **kwargs):
+        files = self._client.nlst(path or self.current_dir)
+        if kwargs.get('-t'):
+            return self._ls_tree()
+        else:
+            return '\n'.join([f.replace(self.current_dir, '') for f in files])
+
+
+    def _rm(self, path, **kwargs):
+        if kwargs.get('-r'):
+            self._client.cwd(path)
+            for file_name in self._client.nlst():
+                if '.' in file_name:
+                    self._client.delete(file_name)
+                else:
+                    self._rm(file_name, **kwargs)
+            self._client.cwd('..')
+            self._client.rmd(path)
+            return f"Directory '{path}' removed"
+
+        else:
+            self._client.delete(path)
+            return f"File '{path}' removed."
 
     def _pwd(self):
-        if self._client:
-            return self.current_dir
+        return self.current_dir
 
 
     def _help(self):
@@ -99,7 +115,7 @@ class FTPClient:
 
 
     def _shutdown(self):
-        print(colored('\nGoodbye!', 'green'))
+        print(colored('\nGoodbye!', 'cyan'))
         self.disconnect()
         exit(0)
 
@@ -138,10 +154,11 @@ class FTPClient:
                 args = [arg for arg in command_parts[1:] if not arg.startswith('-')]
 
                 if command_name in self.commands:
-                    command_fn = self.commands[command_name]
-                    result = command_fn(*args, **dict(zip(flags, [True] * len(flags))))
-                    if result:
-                        print(result)
+                    if self._client:
+                        command_fn = self.commands[command_name]
+                        result = command_fn(*args, **dict(zip(flags, [True] * len(flags))))
+                        if result:
+                            print(f'{result}\n')
                 elif command_name == 'exit':
                     break
                 else:
@@ -150,3 +167,4 @@ class FTPClient:
                 pass
             except KeyboardInterrupt:
                 break
+ 
