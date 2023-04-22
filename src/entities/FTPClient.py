@@ -11,7 +11,6 @@ class FTPClient:
         self.current_dir: str = '/'
         self.commands = {
             'ls': self._ls,
-            'ls_tree': self.ls_tree,
             'mkdir': self._mkdir,
             'touch': self._touch,
             'mv': self._mv,
@@ -19,55 +18,9 @@ class FTPClient:
             'cat': self._cat,
             'pwd': self._pwd,
             'nano': self._nano,
-            'exit': self._exit,
+            'exit': self._shutdown,
             'help': self._help,
         }
-
-    def connect(self):
-        print(colored(f'Trying {self.user}:{self.pwd}', 'yellow'))
-
-        try:
-            ftp = ftplib.FTP(self.host, timeout=5)
-            response = ftp.login(self.user, self.pwd)
-            if all(x in response.lower() for x in ['230', 'login successful.']):
-                print(colored(f'[*] {self.host} FTP Login Success: {self.user}:{self.pwd}', 'green'))
-                self._client = ftp
-                return True
-
-            return False
-        except Exception as e:
-            pass
-
-
-    def disconnect(self):
-        if self._client:
-            self._client.quit()
-
-
-    def cmd(self):
-        print(colored(f'Welcome to FTP shell. Host: {self.host}', 'green'))
-        print(colored("Type 'help' to see available commands.", 'green'))
-
-        while True:
-            try:
-                command = input(colored(f'ftp:{self.current_dir} $ ', 'blue'))
-                command_parts = command.split(' ')
-                command_name = command_parts[0]
-
-                if command_name in self.commands:
-                    command_fn = self.commands[command_name]
-                    args = command_parts[1:]
-                    result = command_fn(*args)
-                    if result:
-                        print(result)
-
-                else:
-                    print(colored(f'Invalid command: {command_name}', 'red'))
-
-            except Exception as e:
-                pass
-            except KeyboardInterrupt:
-                self._exit()
 
 
     def _mkdir(self, dir_name):
@@ -115,13 +68,16 @@ class FTPClient:
             return f"File '{file_name}' edited successfully."
 
 
-    def _ls(self, path=""):
+    def _ls(self, path="", **kwargs):
         if self._client:
             files = self._client.nlst(path or self.current_dir)
-            return '\n'.join(files)
+            if kwargs.get('-t'):
+                return self.ls_tree()
+            else:
+                return '\n'.join(files)
 
 
-    def ls_tree(self, path='', level=0):
+    def _ls_tree(self, path='', level=0):
         if self._client:
             files = self._client.nlst(path or self.current_dir)
             for file in files:
@@ -129,7 +85,8 @@ class FTPClient:
                     print(f"| {'| ' * level}- {file}")
                 else:
                     print(f"| {'| ' * level}+ {file}")
-                    self.ls_tree(path=file, level=level+1)
+                    self._ls_tree(path=file, level=level+1)
+
 
     def _pwd(self):
         if self._client:
@@ -141,7 +98,55 @@ class FTPClient:
         print('\n'.join(self.commands.keys()))
 
 
-    def _exit(self):
+    def _shutdown(self):
         print(colored('\nGoodbye!', 'green'))
         self.disconnect()
         exit(0)
+
+
+    def connect(self):
+        print(colored(f'Trying {self.user}:{self.pwd}', 'yellow'))
+
+        try:
+            ftp = ftplib.FTP(self.host, timeout=5)
+            response = ftp.login(self.user, self.pwd)
+            if all(x in response.lower() for x in ['230', 'login successful.']):
+                print(colored(f'[*] {self.host} FTP Login Success: {self.user}:{self.pwd}', 'green'))
+                self._client = ftp
+                return True
+
+            return False
+        except Exception as e:
+            pass
+
+
+    def disconnect(self):
+        if self._client:
+            self._client.quit()
+
+
+    def cmd(self):
+        print(colored(f'Welcome to FTP shell. Host: {self.host}', 'green'))
+        print(colored("Type 'help' to see available commands.", 'green'))
+
+        while True:
+            try:
+                command = input(colored(f'ftp:{self.current_dir} $ ', 'blue'))
+                command_parts = command.split(' ')
+                command_name = command_parts[0]
+                flags = [arg for arg in command_parts[1:] if arg.startswith('-')]
+                args = [arg for arg in command_parts[1:] if not arg.startswith('-')]
+
+                if command_name in self.commands:
+                    command_fn = self.commands[command_name]
+                    result = command_fn(*args, **dict(zip(flags, [True] * len(flags))))
+                    if result:
+                        print(result)
+                elif command_name == 'exit':
+                    break
+                else:
+                    print(colored(f'Invalid command: {command_name}', 'red'))
+            except Exception as e:
+                pass
+            except KeyboardInterrupt:
+                break
