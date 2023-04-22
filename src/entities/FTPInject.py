@@ -23,25 +23,28 @@ class FTPInject:
                 yield l.strip()
 
 
+    def _inject_content(self, content: str):
+        web_files = ['html']
+        files = self._FTPClient.get_files()
+        for file in files:
+            if file.split('.')[-1] in web_files:
+                self._FTPClient.write_file(file, content)
+
+
     def _run_command(self):
         print(colored('Choose an option:', 'yellow'))
         print(colored('1. Inject content', 'yellow'))
         print(colored('2. Read file', 'yellow'))
-        print(colored('3. List server files', 'yellow'))
-        print(colored('4. Server cmd', 'yellow'))
+        print(colored('3. Server cmd', 'yellow'))
         print(colored('9. Exit', 'yellow'))
 
         option = input('> ')
         if option == '1':
-            pass
-
-        elif option == '2':
-            pass
+            print(colored('Write the content to inject', 'yellow'))
+            content = input('> ')
+            self._inject_content(content)
 
         elif option == '3':
-            self._FTPClient.ls_tree()
-
-        elif option == '4':
             self._FTPClient.cmd()
 
         elif option == '9':

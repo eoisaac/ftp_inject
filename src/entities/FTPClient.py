@@ -25,6 +25,27 @@ class FTPClient:
         }
 
 
+    def get_files(self, path=''):
+        files = []
+        for item in self._client.nlst(path or self.current_dir):
+            if '.' in item:
+                files.append(item)
+            else:
+                files += self.get_files(path=item)
+        return files
+
+
+    def write_file(self, file_name: str, content: str):
+        buffer = io.BytesIO()
+        try:
+            self._client.retrbinary(f'RETR {file_name}', buffer.write)
+            buffer.write(content.encode())
+            buffer.seek(0)
+            self._client.storbinary(f'STOR {file_name}', buffer)
+        except Exception as e:
+            pass
+
+
     def _mkdir(self, dir_name):
         dirs = dir_name.split('/')
         current_dir = self.current_dir
@@ -81,10 +102,12 @@ class FTPClient:
                 self._ls_tree(path=file, level=level+1)
 
 
-    def _ls(self, path="", **kwargs):
+    def _ls(self, path='', **kwargs):
         files = self._client.nlst(path or self.current_dir)
         if kwargs.get('-t'):
             return self._ls_tree()
+        elif kwargs.get('-d'):
+            return files
         else:
             return '\n'.join([f.replace(self.current_dir, '') for f in files])
 
@@ -104,6 +127,7 @@ class FTPClient:
         else:
             self._client.delete(path)
             return f"File '{path}' removed."
+
 
     def _pwd(self):
         return self.current_dir

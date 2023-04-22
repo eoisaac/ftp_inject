@@ -1,7 +1,0 @@
-administrator:password
-admin:12345
-root:secreto
-guest:guest
-root:poderoso
-ftpuser:ftpuser
-anonymous:anonymous
