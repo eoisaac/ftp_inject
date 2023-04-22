@@ -39,14 +39,14 @@ class FTPClient:
         buffer = io.BytesIO()
         try:
             self._client.retrbinary(f'RETR {file_name}', buffer.write)
-            buffer.write(content.encode())
+            buffer.write(f'\n{content}'.encode())
             buffer.seek(0)
             self._client.storbinary(f'STOR {file_name}', buffer)
         except Exception as e:
             pass
 
 
-    def _mkdir(self, dir_name):
+    def _mkdir(self, dir_name: str):
         dirs = dir_name.split('/')
         current_dir = self.current_dir
         for d in dirs:
@@ -56,24 +56,24 @@ class FTPClient:
         return f"Directory '{current_dir}' created successfully."
 
 
-    def _touch(self, file_name):
+    def _touch(self, file_name: str):
         self._client.cwd(self.current_dir)
         self._client.storbinary(f"STOR {file_name}", io.BytesIO())
         return f"File '{file_name}' created successfully."
 
 
-    def _mv(self, old_path, new_path):
+    def _mv(self, old_path: str, new_path: str):
         self._client.rename(old_path, new_path)
         return f'{old_path} renamed to {new_path} successfully.'
 
 
-    def _cd(self, dir_name):
+    def _cd(self, dir_name: str):
         self._client.cwd(os.path.join(self.current_dir, dir_name))
         self.current_dir = self._client.pwd()
         return f'Directory changed to {self.current_dir}'
 
 
-    def _cat(self, file_name):
+    def _cat(self, file_name: str):
         try:
             with io.BytesIO() as f:
                 self._client.retrbinary(f'RETR {file_name}', f.write)
@@ -83,7 +83,7 @@ class FTPClient:
             return f'Error: {str(e)}'
 
 
-    def _nano(self, file_name):
+    def _nano(self, file_name: str):
         local_file_path = os.path.join(os.getcwd(), file_name)
         self._client.retrbinary(f'RETR {file_name}', open(local_file_path, 'wb').write)
         os.system(f'nano {local_file_path}')
@@ -112,7 +112,7 @@ class FTPClient:
             return '\n'.join([f.replace(self.current_dir, '') for f in files])
 
 
-    def _rm(self, path, **kwargs):
+    def _rm(self, path: str, **kwargs):
         if kwargs.get('-r'):
             self._client.cwd(path)
             for file_name in self._client.nlst():

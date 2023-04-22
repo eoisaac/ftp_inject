@@ -34,8 +34,7 @@ class FTPInject:
     def _run_command(self):
         print(colored('Choose an option:', 'yellow'))
         print(colored('1. Inject content', 'yellow'))
-        print(colored('2. Read file', 'yellow'))
-        print(colored('3. Server cmd', 'yellow'))
+        print(colored('2. Server cmd', 'yellow'))
         print(colored('9. Exit', 'yellow'))
 
         option = input('> ')
@@ -44,7 +43,7 @@ class FTPInject:
             content = input('> ')
             self._inject_content(content)
 
-        elif option == '3':
+        elif option == '2':
             self._FTPClient.cmd()
 
         elif option == '9':
